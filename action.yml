@@ -1,0 +1,46 @@
+name: 'Git Checkout Windows'
+description: 'Checkout repository without using actions/checkout on Windows'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Clean Workspace
+      shell: cmd
+      run: |
+        REM Safely clean workspace
+        for /d %%d in (*) do rmdir /S /Q "%%d"
+        for %%f in (*) do del "%%f"
+        echo "Workspace cleaned."
+
+    - name: Initialize Git and Configure
+      shell: cmd
+      run: |
+        git init || exit /b 1
+        git config --global --add safe.directory "%GITHUB_WORKSPACE%"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+
+    - name: Setup Authentication and Remote
+      shell: cmd
+      run: |
+        git remote add origin https://%GITHUB_TOKEN%@github.com/%GITHUB_REPOSITORY%.git || exit /b 1
+
+    - name: Fetch and Checkout
+      shell: cmd
+      run: |
+        REM Determine ref to fetch based on event type
+        IF "%GITHUB_EVENT_NAME%"=="pull_request" (
+          FOR /F "tokens=1,2 delims=/" %%a IN ("%GITHUB_REF%") DO (
+            SET PR_NUM=%%b
+          )
+          git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin "pull/%PR_NUM%/head:pr/%PR_NUM%" || exit /b 1
+          git checkout "pr/%PR_NUM%" || exit /b 1
+        ) ELSE IF "%GITHUB_REF:~0,10%"=="refs/tags/" (
+          git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin "%GITHUB_REF%:%GITHUB_REF%" || exit /b 1
+          git checkout "%GITHUB_REF%" || exit /b 1
+        ) ELSE (
+          git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin "%GITHUB_REF%:%GITHUB_REF%" || exit /b 1
+          FOR /F "tokens=3 delims=/" %%a IN ("%GITHUB_REF%") DO (
+            git checkout "%%a" || exit /b 1
+          )
+        )
